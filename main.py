@@ -53,22 +53,18 @@ def train():
             if batch_idx % 10 == 0:
                 print(f"Epoch [{epoch}/{num_epochs}] Step [{batch_idx}] RMS Loss: {loss.item():.6f}")
 
-            # 可视化 (每 50 步保存一次)
-            if batch_idx % 50 == 0:
-                idx = 0
-                n_t = inputs[idx].detach().cpu()
-                p_t = outputs[idx].detach().cpu()
-                c_t = targets[idx].detach().cpu()
-                par_t = params[idx].detach().cpu()
-
-                save_name = f"results/epoch_{epoch}_step_{batch_idx}.jpg"
-                # 调用可视化工具，不需要手动传 scale 等参数了
-                ksigma.save_visual_comparison(n_t, p_t, c_t, par_t, save_name)
-
+        # 存图
+        n_t = inputs[0].detach().cpu()
+        p_t = outputs[0].detach().cpu()
+        c_t = targets[0].detach().cpu()
+        par_t = params[0].detach().cpu()
+        save_name = f"results/epoch_{epoch}.jpg"
+        ksigma.save_visual_comparison(n_t, p_t, c_t, par_t, save_name)
+        # 打印损失函数
         avg_loss = epoch_loss / len(dataloader)
         print(f"=== Epoch {epoch} Done. Avg Loss: {avg_loss:.6f} ===")
-        
-        #torch.save(model.state_dict(), f"denoise_epoch_{epoch}.pth")
+        # 保存模型
+        torch.save(model.state_dict(), f"results/denoise_epoch_{epoch}.pth")
 
 if __name__ == "__main__":
     train()

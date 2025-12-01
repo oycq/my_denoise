@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import cv2
 from torch.utils.data import Dataset
+import sys
 
 # ==========================================
 # [MACRO] CONFIGURATION MACROS
@@ -21,7 +22,7 @@ NOISE_MODEL_PATH = 'noise_model.json'
 
 # 数据增强参数 (Augmentation)
 AUG_BRIGHTNESS_MIN = 0.5  # [cite: 205] 随机亮度下限
-AUG_BRIGHTNESS_MAX = 2.0  # [cite: 205] 随机亮度上限
+AUG_BRIGHTNESS_MAX = 1.2  # [cite: 205] 随机亮度上限
 AUG_GAIN_MIN = 1.0        # 随机 Gain 下限
 AUG_GAIN_MAX = 8.0        # 随机 Gain 上限
 
@@ -42,9 +43,8 @@ def get_noise_parameters(gain):
         c_sigma2 = model['sigma2_coefficients']['c']
         sigma2 = a_sigma2 * (gain ** 2) + b_sigma2 * gain + c_sigma2
     else:
-        # Fallback values
-        k = 0.0006 * gain - 0.0001
-        sigma2 = 0.0002 * (gain**2) + 0.0001 * gain
+        print("未找到噪模文件")
+        sys.exit(0)
     return k, sigma2
 
 def k_sigma_transform(x, k, sigma2, inverse=False):
