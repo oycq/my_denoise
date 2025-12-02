@@ -98,46 +98,46 @@ def unpack_rggb_to_bayer(rggb):
 
 class RawDenoisingDataset(Dataset):
     def __init__(self, raw_files):
-        self.raw_files = raw_files
+        self.raw_images = []
+        for filename in raw_files:
+            raw_data = np.fromfile(filename, dtype=np.uint16)
+            image = raw_data.reshape((RAW_HEIGHT, RAW_WIDTH))
+            image_float = image.astype(np.float32) / 65535.0
+            self.raw_images.append(image_float)
 
     def __len__(self):
-        return len(self.raw_files) * 1000
+        return len(self.raw_images) * 1000
 
     def __getitem__(self, idx):
-        file_idx = np.random.randint(0, len(self.raw_files))
-        filename = self.raw_files[file_idx]
+        file_idx = np.random.randint(0, len(self.raw_images))
+        image_float = self.raw_images[file_idx]
         
-        # 1. Read Raw
-        raw_data = np.fromfile(filename, dtype=np.uint16)
-        image = raw_data.reshape((RAW_HEIGHT, RAW_WIDTH))
-        image_float = image.astype(np.float32) / 65535.0
-
-        # 2. Pack Bayer -> RGGB
+        # 1. Pack Bayer -> RGGB
         patch_4ch = pack_raw_bayer_to_rggb(image_float)
 
-        # 3. Random Crop to CROP_SIZE
+        # 2. Random Crop to CROP_SIZE
         _, H, W = patch_4ch.shape
         h_start = np.random.randint(0, H - CROP_SIZE)
         w_start = np.random.randint(0, W - CROP_SIZE)
         patch_4ch = patch_4ch[:, h_start:h_start + CROP_SIZE, w_start:w_start + CROP_SIZE]
 
-        # 4. Augmentation (使用宏定义的参数)
+        # 3. Augmentation (使用宏定义的参数)
         brightness_scale = np.random.uniform(AUG_BRIGHTNESS_MIN, AUG_BRIGHTNESS_MAX)
         patch_4ch = patch_4ch * brightness_scale
 
         gain = np.random.uniform(AUG_GAIN_MIN, AUG_GAIN_MAX)
 
-        # 5. Transform & Noise
+        # 4. Transform & Noise
         k, sigma2 = get_noise_parameters(gain)
         
         clean_transformed = k_sigma_transform(patch_4ch, k, sigma2, inverse=False)
         noisy_transformed = add_noise_transformed(clean_transformed)
         
-        # 6. Normalize (使用宏定义的 INP_SCALE)
+        # 5. Normalize (使用宏定义的 INP_SCALE)
         input_tensor = noisy_transformed / INP_SCALE
         target_tensor = clean_transformed / INP_SCALE
 
-        # 7. Return Data
+        # 6. Return Data
         params = np.array([k, sigma2, gain], dtype=np.float32)
         
         return (torch.from_numpy(input_tensor).float(), 

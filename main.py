@@ -54,7 +54,7 @@ def train():
             epoch_loss += loss.item()
 
             if batch_idx % 10 == 0:
-                print(f"Epoch [{epoch}/{num_epochs}] Step [{batch_idx}] RMS Loss: {loss.item():.6f}   {torch.abs(inputs - targets).mean()}")
+                print(f"Epoch [{epoch}/{num_epochs}] Step [{batch_idx}] RMS Loss: {loss.item():.6f}   {torch.abs(inputs - targets).mean():.6f}")
 
         # 存图
         n_t = inputs[0].detach().cpu()
