@@ -12,7 +12,7 @@ import sys
 # 图像相关
 RAW_HEIGHT = 3000
 RAW_WIDTH = 4000
-PAD_DIVISOR = 16          # 网络下采样倍率要求
+CROP_SIZE = 256           # 新增: 随机裁剪大小
 
 # 归一化参数
 INP_SCALE = 12800.0       # 输入归一化除数
@@ -92,25 +92,6 @@ def unpack_rggb_to_bayer(rggb):
     
     return bayer
 
-def pad_rggb_to_multiple(rggb, divisor=PAD_DIVISOR):
-    _, H, W = rggb.shape
-    pad_h = (divisor - H % divisor) % divisor
-    pad_w = (divisor - W % divisor) % divisor
-    
-    if pad_h == 0 and pad_w == 0:
-        return rggb
-    
-    padded_rggb = np.pad(rggb, ((0, 0), (0, pad_h), (0, pad_w)), mode='reflect')
-    return padded_rggb
-
-def unpad_rggb(padded_rggb):
-    """
-    根据 RAW_HEIGHT 和 RAW_WIDTH 计算原始 RGGB 尺寸并裁剪
-    """
-    orig_h = RAW_HEIGHT // 2
-    orig_w = RAW_WIDTH // 2
-    return padded_rggb[:, :orig_h, :orig_w]
-
 # ==========================================
 # Part 3: The Dataset
 # ==========================================
@@ -120,7 +101,7 @@ class RawDenoisingDataset(Dataset):
         self.raw_files = raw_files
 
     def __len__(self):
-        return len(self.raw_files) * 20
+        return len(self.raw_files) * 1000
 
     def __getitem__(self, idx):
         file_idx = np.random.randint(0, len(self.raw_files))
@@ -134,8 +115,11 @@ class RawDenoisingDataset(Dataset):
         # 2. Pack Bayer -> RGGB
         patch_4ch = pack_raw_bayer_to_rggb(image_float)
 
-        # 3. Pad (使用宏定义的 PAD_DIVISOR)
-        patch_4ch = pad_rggb_to_multiple(patch_4ch)
+        # 3. Random Crop to CROP_SIZE
+        _, H, W = patch_4ch.shape
+        h_start = np.random.randint(0, H - CROP_SIZE)
+        w_start = np.random.randint(0, W - CROP_SIZE)
+        patch_4ch = patch_4ch[:, h_start:h_start + CROP_SIZE, w_start:w_start + CROP_SIZE]
 
         # 4. Augmentation (使用宏定义的参数)
         brightness_scale = np.random.uniform(AUG_BRIGHTNESS_MIN, AUG_BRIGHTNESS_MAX)
@@ -182,17 +166,12 @@ def save_visual_comparison(noisy_tensor, pred_tensor, clean_tensor, params_tenso
     pred = k_sigma_transform(pred, k, sigma2, inverse=True)
     clean = k_sigma_transform(clean, k, sigma2, inverse=True)
 
-    # 3. Unpad (自动裁剪回 RAW_HEIGHT/2, RAW_WIDTH/2)
-    noisy = unpad_rggb(noisy)
-    pred = unpad_rggb(pred)
-    clean = unpad_rggb(clean)
-
-    # 4. Unpack
+    # 3. Unpack
     noisy_bayer = unpack_rggb_to_bayer(noisy)
     pred_bayer = unpack_rggb_to_bayer(pred)
     clean_bayer = unpack_rggb_to_bayer(clean)
 
-    # 5. Post Process
+    # 4. Post Process
     def process_for_display(bayer_img):
         img = np.clip(bayer_img, 0, 1)
         img = np.power(img, 1.0/2.2) # Gamma

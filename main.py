@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 import net
 import ksigma
 import sys
+import wandb
 
 def train():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -21,16 +22,19 @@ def train():
     # 结果目录
     os.makedirs("results", exist_ok=True)
 
+    # 初始化 WandB
+    wandb.init(project="denoising-project")
+
     # Dataset (参数都在 ksigma 宏里定义了)
     dataset = ksigma.RawDenoisingDataset(raw_files)
-    dataloader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=4)
+    dataloader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=47)
 
     # 模型
     model = net.Network().to(device)
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.Adam(model.parameters(),lr=0.001)
     mse_criterion = nn.MSELoss()
 
-    num_epochs = 100
+    num_epochs = 1000
 
     model.train()
     for epoch in range(num_epochs):
@@ -42,8 +46,7 @@ def train():
             optimizer.zero_grad()
             outputs = model(inputs)
             
-            # [cite_start]Loss [cite: 208]
-            loss = torch.sqrt(mse_criterion(outputs, targets))
+            loss = torch.abs(outputs - targets).mean()
             
             loss.backward()
             optimizer.step()
@@ -51,7 +54,7 @@ def train():
             epoch_loss += loss.item()
 
             if batch_idx % 10 == 0:
-                print(f"Epoch [{epoch}/{num_epochs}] Step [{batch_idx}] RMS Loss: {loss.item():.6f}")
+                print(f"Epoch [{epoch}/{num_epochs}] Step [{batch_idx}] RMS Loss: {loss.item():.6f}   {torch.abs(inputs - targets).mean()}")
 
         # 存图
         n_t = inputs[0].detach().cpu()
@@ -65,6 +68,9 @@ def train():
         print(f"=== Epoch {epoch} Done. Avg Loss: {avg_loss:.6f} ===")
         # 保存模型
         torch.save(model.state_dict(), f"results/denoise_epoch_{epoch}.pth")
+
+        # 记录到 WandB
+        wandb.log({"epoch": epoch, "avg_loss": avg_loss})
 
 if __name__ == "__main__":
     train()
