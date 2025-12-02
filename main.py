@@ -22,7 +22,7 @@ def train():
         wandb.init(project="denoising-project")
 
     # Dataset (参数都在 ksigma 宏里定义了)
-    dataset = ksigma.RawDenoisingDataset(glob.glob("*.raw"))
+    dataset = ksigma.RawDenoisingDataset(glob.glob("train_data/*.raw"))
     dataloader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=47)
 
     # 模型
