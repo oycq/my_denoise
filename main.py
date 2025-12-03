@@ -9,7 +9,7 @@ import ksigma
 
 IF_WANDB = True
 PRE_LOAD_PTH = "pretrain.pth"
-LEARNING_RATE = 0.01
+LEARNING_RATE = 0.0001
 NUM_EPOCHS = 1000
 
 def train():
@@ -25,7 +25,7 @@ def train():
         wandb.init(project="denoising-project")
 
     dataset = ksigma.RawDenoisingDataset(glob.glob("train_data/*.raw"))
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=31)
+    dataloader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=31, pin_memory=True)
 
     # 模型
     model = net.Network().to(device)
