@@ -7,8 +7,10 @@ from torch.utils.data import DataLoader
 import net
 import ksigma
 
-IF_WANDB = False
-PRE_LOAD_PTH = "results_backup/denoise_epoch_99.pth"
+IF_WANDB = True
+PRE_LOAD_PTH = "pretrain.pth"
+LEARNING_RATE = 0.01
+NUM_EPOCHS = 1000
 
 def train():
     device = torch.device("cuda")
@@ -19,23 +21,21 @@ def train():
     # 初始化 WandB
     if IF_WANDB:
         import wandb
+        os.environ["WANDB_API_KEY"] = "72217df9e0f4d28c36a5727db964576fb2caac26"
         wandb.init(project="denoising-project")
 
-    # Dataset (参数都在 ksigma 宏里定义了)
     dataset = ksigma.RawDenoisingDataset(glob.glob("train_data/*.raw"))
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=47)
+    dataloader = DataLoader(dataset, batch_size=32, shuffle=True, num_workers=31)
 
     # 模型
     model = net.Network().to(device)
     if PRE_LOAD_PTH:
         checkpoint = torch.load(PRE_LOAD_PTH, map_location=device)
         model.load_state_dict(checkpoint, strict=True)
-    optimizer = optim.Adam(model.parameters(),lr=0.001)
-
-    num_epochs = 100
+    optimizer = optim.Adam(model.parameters(),lr=LEARNING_RATE)
 
     model.train()
-    for epoch in range(num_epochs):
+    for epoch in range(NUM_EPOCHS):
         epoch_loss = 0.0
         
         for batch_idx, (inputs, targets, params) in enumerate(dataloader):
@@ -52,7 +52,7 @@ def train():
             epoch_loss += loss.item()
 
             if batch_idx % 10 == 0:
-                print(f"Epoch [{epoch}/{num_epochs}] Step [{batch_idx}] RMS Loss: {loss.item():.6f}   {torch.abs(inputs - targets).mean():.6f}")
+                print(f"Epoch [{epoch}/{NUM_EPOCHS}] Step [{batch_idx}] RMS Loss: {loss.item():.6f}   {torch.abs(inputs - targets).mean():.6f}")
 
         # 存图
         n_t = inputs[0].detach().cpu()
