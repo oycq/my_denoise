@@ -12,7 +12,7 @@ import sys
 # 图像相关
 RAW_HEIGHT = 3000
 RAW_WIDTH = 4000
-CROP_SIZE = 256           # 新增: 随机裁剪大小
+CROP_SIZE = 256           # 随机裁剪大小
 
 # 归一化参数
 INP_SCALE = 12800.0       # 输入归一化除数
@@ -21,8 +21,8 @@ INP_SCALE = 12800.0       # 输入归一化除数
 NOISE_MODEL_PATH = 'noise_model.json'
 
 # 数据增强参数 (Augmentation)
-AUG_BRIGHTNESS_MIN = 0.5  # [cite: 205] 随机亮度下限
-AUG_BRIGHTNESS_MAX = 1.2  # [cite: 205] 随机亮度上限
+AUG_BRIGHTNESS_MIN = 0.5  # 随机亮度下限
+AUG_BRIGHTNESS_MAX = 1.6  # 随机亮度上限
 AUG_GAIN_MIN = 1.0        # 随机 Gain 下限
 AUG_GAIN_MAX = 8.0        # 随机 Gain 上限
 
@@ -100,15 +100,33 @@ def unpack_rggb_to_bayer(rggb):
 class RawDenoisingDataset(Dataset):
     def __init__(self, raw_files):
         self.raw_images = []
+        print(f"Loading {len(raw_files)} raw images and generating pyramid...")
+
         for filename in raw_files:
+            # 读取原始数据
             raw_data = np.fromfile(filename, dtype=np.uint16)
             image = raw_data.reshape((RAW_HEIGHT, RAW_WIDTH))
             image_float = image.astype(np.float32) / 65535.0
+
+            # 1. 原始尺度 (Level 0) -> (4, H/2, W/2)
             patch_4ch = pack_raw_bayer_to_rggb(image_float)
             self.raw_images.append(patch_4ch)
 
+            # 准备 OpenCV 格式: (C, H, W) -> (H, W, C)
+            img_hwc = patch_4ch.transpose(1, 2, 0)
+
+            # 2. 1/2 尺度 (Level 1)
+            img_half = cv2.pyrDown(img_hwc)
+            self.raw_images.append(img_half.transpose(2, 0, 1))
+
+            # 3. 1/4 尺度 (Level 2)
+            img_quarter = cv2.pyrDown(img_half)
+            self.raw_images.append(img_quarter.transpose(2, 0, 1))
+
+        print(f"Total images in pyramid dataset: {len(self.raw_images)}")
+
     def __len__(self):
-        return len(self.raw_images) * 1000
+        return len(self.raw_images) * 333
 
     def __getitem__(self, idx):
         # 1. Random img
