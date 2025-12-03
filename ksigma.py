@@ -55,10 +55,12 @@ def k_sigma_transform(x, k, sigma2, inverse=False):
     else:
         return k_safe * (x - term_bias)
 
+rng = np.random.default_rng()
 def add_noise_transformed(transformed_clean):
     noise_variance = np.maximum(transformed_clean, 0)
     noise_std = np.sqrt(noise_variance)
-    noise = np.random.normal(0, noise_std, transformed_clean.shape)
+    standard_noise = rng.standard_normal(transformed_clean.shape, dtype=np.float32)
+    noise = standard_noise * noise_std
     return transformed_clean + noise
 
 # ==========================================
@@ -95,7 +97,6 @@ def unpack_rggb_to_bayer(rggb):
 # ==========================================
 # Part 3: The Dataset
 # ==========================================
-
 class RawDenoisingDataset(Dataset):
     def __init__(self, raw_files):
         self.raw_images = []
@@ -103,18 +104,17 @@ class RawDenoisingDataset(Dataset):
             raw_data = np.fromfile(filename, dtype=np.uint16)
             image = raw_data.reshape((RAW_HEIGHT, RAW_WIDTH))
             image_float = image.astype(np.float32) / 65535.0
-            self.raw_images.append(image_float)
+            patch_4ch = pack_raw_bayer_to_rggb(image_float)
+            self.raw_images.append(patch_4ch)
 
     def __len__(self):
         return len(self.raw_images) * 1000
 
     def __getitem__(self, idx):
+        # 1. Random img
         file_idx = np.random.randint(0, len(self.raw_images))
-        image_float = self.raw_images[file_idx]
+        patch_4ch = self.raw_images[file_idx]
         
-        # 1. Pack Bayer -> RGGB
-        patch_4ch = pack_raw_bayer_to_rggb(image_float)
-
         # 2. Random Crop to CROP_SIZE
         _, H, W = patch_4ch.shape
         h_start = np.random.randint(0, H - CROP_SIZE)
@@ -139,7 +139,6 @@ class RawDenoisingDataset(Dataset):
 
         # 6. Return Data
         params = np.array([k, sigma2, gain], dtype=np.float32)
-        
         return (torch.from_numpy(input_tensor).float(), 
                 torch.from_numpy(target_tensor).float(),
                 torch.from_numpy(params).float())
