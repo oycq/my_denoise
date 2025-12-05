@@ -6,11 +6,12 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import net
 import ksigma
+from torch.cuda.amp import autocast, GradScaler
 
-IF_WANDB = False
-PRE_LOAD_PTH = "pretrain.pth"
+IF_WANDB = True
+PRE_LOAD_PTH = None#"pretrain.pth"
 LEARNING_RATE = 0.0001
-NUM_EPOCHS = 1000
+NUM_EPOCHS = 100000
 
 def train():
     device = torch.device("cuda")
@@ -33,6 +34,7 @@ def train():
         checkpoint = torch.load(PRE_LOAD_PTH, map_location=device)
         model.load_state_dict(checkpoint, strict=True)
     optimizer = optim.Adam(model.parameters(),lr=LEARNING_RATE)
+    scaler = GradScaler()
 
     model.train()
     for epoch in range(NUM_EPOCHS):
@@ -42,13 +44,14 @@ def train():
             inputs, targets = inputs.to(device), targets.to(device)
             
             optimizer.zero_grad()
-            outputs = model(inputs)
+            with autocast():
+                outputs = model(inputs)
+                loss = torch.abs(outputs - targets).mean()
             
-            loss = torch.abs(outputs - targets).mean()
-            
-            loss.backward()
-            optimizer.step()
-            
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+
             epoch_loss += loss.item()
 
             if batch_idx % 10 == 0:
